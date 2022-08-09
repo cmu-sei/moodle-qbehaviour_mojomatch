@@ -47,12 +47,12 @@ class qbehaviour_mojomatch extends question_behaviour_with_save {
     }
 
     public function get_right_answer_summary() {
-	global $PAGE;
+        global $PAGE;
         if ($PAGE->pagetype != 'question-bank-previewquestion-preview') {
-		$answer = $this->question->get_rightanswer_topomojo($this->qa);
-	} else {
-		$answer = $this->question->get_right_answer_summary();
-	}
+                $answer = $this->question->get_rightanswer_topomojo($this->qa);
+        } else {
+                $answer = $this->question->get_right_answer_summary();
+        }
         return $answer;
     }
 
