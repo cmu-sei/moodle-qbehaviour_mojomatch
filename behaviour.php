@@ -47,7 +47,17 @@ class qbehaviour_mojomatch extends question_behaviour_with_save {
     }
 
     public function get_right_answer_summary() {
-        return $this->question->get_right_answer_summary();
+        echo "we can set rightanswer through here in behaviour get_right_answer_summary<br>";
+    
+	global $PAGE;
+        if ($PAGE->pagetype != 'question-bank-previewquestion-preview') {
+		$answer = $this->question->get_rightanswer_topomojo($this->qa);
+	} else {
+		$answer = $this->question->get_right_answer_summary();
+	}
+	echo "answer: $answer<br>";
+
+        return $answer;
     }
 
     public function process_action(question_attempt_pending_step $pendingstep) {
@@ -106,11 +116,29 @@ class qbehaviour_mojomatch extends question_behaviour_with_save {
         if (!$this->question->is_gradable_response($response)) {
             $pendingstep->set_state(question_state::$gaveup);
         } else {
-            list($fraction, $state) = $this->question->grade_response($response);
+            //list($fraction, $state) = $this->question->grade_response($response);
+            list($fraction, $state) = $this->question->grade_response_qa($response, $this->qa);
             $pendingstep->set_fraction($fraction);
             $pendingstep->set_state($state);
         }
         $pendingstep->set_new_response_summary($this->question->summarise_response($response));
         return question_attempt::KEEP;
+    }
+    public function init_first_step(question_attempt_step $step, $variant) {
+	    parent::init_first_step($step, $variant);
+
+	// parent does these two:
+	/*
+        $this->question->start_attempt($step, $variant);
+        $step->set_state(question_state::$todo);
+	*/
+	    //$step->set_behaviour_var('_triesleft', count($this->question->hints) + 1);
+/*
+ * global $PAGE;
+        if ($PAGE->pagetype != 'question-bank-previewquestion-preview') {
+    
+		$this->question->get_rightanswer_topomojo($this->qa);
+	}
+ */
     }
 }
