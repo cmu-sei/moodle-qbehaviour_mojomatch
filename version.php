@@ -29,7 +29,6 @@ $plugin->component = 'qbehaviour_mojomatch';
 $plugin->version   = 2022072200;
 $plugin->dependencies = [
     'qtype_mojomatch' => 2022042200,
-    'mod_topomojo'    => 2022072200,
 ];
 $plugin->requires  = 2022041200;
 
