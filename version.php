@@ -26,7 +26,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'qbehaviour_mojomatch';
-$plugin->version   = 2024091801;
+$plugin->version   = 2024092201;
 $plugin->dependencies = [
     'qtype_mojomatch' => 2022042200,
 ];
