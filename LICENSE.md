@@ -1,4 +1,4 @@
-# TopoMojo Plugin for Moodle
+# TopoMojo Question Behaviour Plugin for Moodle
 
 Copyright 2024 Carnegie Mellon University.
 
@@ -506,4 +506,4 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-DM24-1175
+DM24-1319
