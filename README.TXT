@@ -4,7 +4,7 @@
 This is a question behaviour plugin that allows Moodle to pull correct answers from TopoMojo during a live question attempt. Moodle will call functions from the TopoMojo Question Type Plugin, qtype_mojomatch, to perform this. This plugin is therefore also used in conjunction with the Moodle activity plugin for TopoMojo labs, mod_topomojo.
 
 ## License
-MojoMatch question behaviour plugin for Moodle
+TopoMojo question behaviour plugin for Moodle
 
 Copyright 2024 Carnegie Mellon University.
 
