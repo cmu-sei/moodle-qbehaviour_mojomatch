@@ -49,6 +49,7 @@ $plugin->version   = 2025071100;
 $plugin->dependencies = [
     'qtype_mojomatch' => 2022042200,
 ];
-$plugin->requires = 2025041401;
+
+$plugin->requires  = 2025041400;
 
 $plugin->maturity  = MATURITY_BETA;
