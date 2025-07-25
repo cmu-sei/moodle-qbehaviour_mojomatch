@@ -45,10 +45,11 @@ DM24-1319
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'qbehaviour_mojomatch';
-$plugin->version   = 2024092301;
+$plugin->version   = 2025071100;
 $plugin->dependencies = [
-    'qtype_mojomatch' => 2022042200,
+    'qtype_mojomatch' => 2025071100,
 ];
+
 $plugin->requires  = 2025041400;
 
 $plugin->maturity  = MATURITY_BETA;
