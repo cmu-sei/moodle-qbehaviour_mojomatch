@@ -45,9 +45,9 @@ DM24-1319
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'qbehaviour_mojomatch';
-$plugin->version   = 2025071100;
+$plugin->version   = 2025081800;
 $plugin->dependencies = [
-    'qtype_mojomatch' => 2025071100,
+    'qtype_mojomatch' => 2025081800,
 ];
 
 $plugin->requires  = 2025041400;
