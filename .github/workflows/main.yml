@@ -77,7 +77,11 @@ jobs:
 
       - name: Package plugin
         run: |
-          zip -r qbehaviour_mojomatch_${{ steps.get_version.outputs.version }}.zip . -x "*.git*"
+          mkdir -p /tmp/package
+          rsync -av --exclude='.git*' --exclude='vendor/' --exclude='node_modules/' ./ /tmp/package/mojomatch/
+          cd /tmp/package
+          zip -r qbehaviour_mojomatch_${{ steps.get_version.outputs.version }}.zip mojomatch/
+          mv qbehaviour_mojomatch_${{ steps.get_version.outputs.version }}.zip $GITHUB_WORKSPACE/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
