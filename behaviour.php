@@ -65,13 +65,8 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
 
     public function get_expected_data() {
         if ($this->qa->get_state()->is_active()) {
-            // In deferred mode, don't show Check button - only save functionality
-            if ($this->preferredbehaviour == 'deferredfeedback') {
-                return array(
-                    'answer' => PARAM_RAW_TRIMMED,
-                );
-            }
-            // In interactive mode, show Check button
+            // Always allow submission (matches TopoMojo's immediate feedback pattern)
+            // Individual Check button per question
             return array(
                 'answer' => PARAM_RAW_TRIMMED,
                 'submit' => PARAM_BOOL,
@@ -93,8 +88,8 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
     public function process_action(question_attempt_pending_step $pendingstep) {
         if ($pendingstep->has_behaviour_var('finish')) {
             return $this->process_finish($pendingstep);
-        } else if ($pendingstep->has_behaviour_var('submit') && $this->preferredbehaviour != 'deferredfeedback') {
-            // Only process Check button in interactive mode
+        } else if ($pendingstep->has_behaviour_var('submit')) {
+            // Process Check button (immediate feedback like TopoMojo)
             return $this->process_submit($pendingstep);
         } else if ($pendingstep->has_behaviour_var('comment')) {
             return $this->process_comment($pendingstep);
