@@ -46,12 +46,38 @@ defined('MOODLE_INTERNAL') || die();
  */
 
 class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
+
+    /** @var string The preferred behaviour for this attempt */
+    protected $preferredbehaviour;
+
+    public function __construct(question_attempt $qa, $preferredbehaviour) {
+        parent::__construct($qa, $preferredbehaviour);
+        $this->preferredbehaviour = $preferredbehaviour;
+    }
+
     public function is_compatible_question(question_definition $question) {
         return $question instanceof question_automatically_gradable;
     }
 
     public function get_min_fraction() {
         return $this->question->get_min_fraction();
+    }
+
+    public function get_expected_data() {
+        if ($this->qa->get_state()->is_active()) {
+            // In deferred mode, don't show Check button - only save functionality
+            if ($this->preferredbehaviour == 'deferredfeedback') {
+                return array(
+                    'answer' => PARAM_RAW_TRIMMED,
+                );
+            }
+            // In interactive mode, show Check button
+            return array(
+                'answer' => PARAM_RAW_TRIMMED,
+                'submit' => PARAM_BOOL,
+            );
+        }
+        return parent::get_expected_data();
     }
 
     public function get_right_answer_summary() {
@@ -67,7 +93,8 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
     public function process_action(question_attempt_pending_step $pendingstep) {
         if ($pendingstep->has_behaviour_var('finish')) {
             return $this->process_finish($pendingstep);
-        } else if ($pendingstep->has_behaviour_var('submit')) {
+        } else if ($pendingstep->has_behaviour_var('submit') && $this->preferredbehaviour != 'deferredfeedback') {
+            // Only process Check button in interactive mode
             return $this->process_submit($pendingstep);
         } else if ($pendingstep->has_behaviour_var('comment')) {
             return $this->process_comment($pendingstep);
@@ -77,6 +104,7 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
     }
 
     public function process_submit(question_attempt_pending_step $pendingstep) {
+        // Interactive mode: Check button grades immediately
         if ($this->qa->get_state()->is_finished()) {
             return question_attempt::DISCARD;
         }
