@@ -36,16 +36,16 @@ DM24-1319
 defined('MOODLE_INTERNAL') || die();
 
 /**
- * Question behaviour for deferred feedback.
+ * Question behaviour for interactive with multiple tries.
  *
- * The student enters their response during the attempt, and it is saved. Later,
- * when the whole attempt is finished, their answer is graded.
+ * The student can submit their response multiple times and get immediate feedback.
+ * Based on the interactive behaviour but customized for TopoMojo integration.
  *
  * @copyright  2024 Carnegie Mellon University
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-class qbehaviour_mojomatch extends question_behaviour_with_save {
+class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
     public function is_compatible_question(question_definition $question) {
         return $question instanceof question_automatically_gradable;
     }
@@ -65,13 +65,32 @@ class qbehaviour_mojomatch extends question_behaviour_with_save {
     }
 
     public function process_action(question_attempt_pending_step $pendingstep) {
-        if ($pendingstep->has_behaviour_var('comment')) {
-            return $this->process_comment($pendingstep);
-        } else if ($pendingstep->has_behaviour_var('finish')) {
+        if ($pendingstep->has_behaviour_var('finish')) {
             return $this->process_finish($pendingstep);
+        } else if ($pendingstep->has_behaviour_var('submit')) {
+            return $this->process_submit($pendingstep);
+        } else if ($pendingstep->has_behaviour_var('comment')) {
+            return $this->process_comment($pendingstep);
         } else {
             return $this->process_save($pendingstep);
         }
+    }
+
+    public function process_submit(question_attempt_pending_step $pendingstep) {
+        if ($this->qa->get_state()->is_finished()) {
+            return question_attempt::DISCARD;
+        }
+
+        if (!$this->is_complete_response($pendingstep)) {
+            $pendingstep->set_state(question_state::$invalid);
+        } else {
+            $response = $pendingstep->get_qt_data();
+            list($fraction, $state) = $this->question->grade_response_qa($response, $this->qa);
+            $pendingstep->set_fraction($fraction);
+            $pendingstep->set_state($state);
+            $pendingstep->set_new_response_summary($this->question->summarise_response($response));
+        }
+        return question_attempt::KEEP;
     }
 
     /*
