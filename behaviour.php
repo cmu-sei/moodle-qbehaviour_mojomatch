@@ -50,9 +50,71 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
     /** @var string The preferred behaviour for this attempt */
     protected $preferredbehaviour;
 
+    /** @var int Cached max tries value */
+    protected $maxtries = null;
+
     public function __construct(question_attempt $qa, $preferredbehaviour) {
         parent::__construct($qa, $preferredbehaviour);
         $this->preferredbehaviour = $preferredbehaviour;
+    }
+
+    /**
+     * Get the maximum number of tries allowed for this question.
+     * Returns the 'submissions' setting from the TopoMojo activity.
+     * 0 = unlimited tries.
+     */
+    public function get_max_tries() {
+        // Return cached value if already looked up
+        if ($this->maxtries !== null) {
+            return $this->maxtries;
+        }
+
+        // Get the topomojo activity setting via global lookup
+        // The question belongs to a topomojo activity context
+        global $DB, $PAGE;
+
+        // Try to get context from PAGE (when rendering challenge page)
+        $context = $PAGE->context;
+
+        if ($context && $context->contextlevel == CONTEXT_MODULE) {
+            $cm = get_coursemodule_from_id('topomojo', $context->instanceid);
+            if ($cm) {
+                $topomojo = $DB->get_record('topomojo', ['id' => $cm->instance]);
+                if ($topomojo) {
+                    // Cache and return
+                    $this->maxtries = (int)$topomojo->submissions;
+                    return $this->maxtries;
+                }
+            }
+        }
+
+        // Default: unlimited tries
+        $this->maxtries = 0;
+        return 0;
+    }
+
+    /**
+     * Adjust the fraction for penalty.
+     * Applies the penalty from the question's penalty field (read from TopoMojo challenge JSON).
+     * Penalty is deducted for each incorrect attempt beyond the first.
+     */
+    public function adjust_fraction($fraction, question_attempt_pending_step $pendingstep) {
+        // If answer is correct (fraction = 1), no penalty
+        if ($fraction >= 1) {
+            return $fraction;
+        }
+
+        // Apply penalty for wrong attempts
+        // Get number of previous tries (not counting this one)
+        $prevtries = $this->qa->get_last_behaviour_var('_try', 0);
+
+        if ($prevtries > 0) {
+            // Deduct penalty * number of previous wrong tries
+            $penalty = $this->question->penalty * $prevtries;
+            $fraction = max(0, $fraction - $penalty);
+        }
+
+        return $fraction;
     }
 
     public function is_compatible_question(question_definition $question) {
@@ -85,6 +147,27 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         return $answer;
     }
 
+    public function get_state_string($showcorrectness) {
+        $state = $this->qa->get_state();
+
+        // If question is active and has been graded, show tries remaining (matches standard interactive)
+        if ($state->is_active() && $state == question_state::$todo) {
+            $laststep = $this->qa->get_last_step();
+            if ($laststep->has_behaviour_var('_try')) {
+                $current_try = $laststep->get_behaviour_var('_try');
+                $max_tries = $this->get_max_tries();
+
+                if ($max_tries > 0) {
+                    $tries_left = $max_tries - $current_try;
+                    return get_string('triesremaining', 'qbehaviour_mojomatch', $tries_left);
+                }
+            }
+        }
+
+        // Otherwise use parent behavior
+        return parent::get_state_string($showcorrectness);
+    }
+
     public function process_action(question_attempt_pending_step $pendingstep) {
         if ($pendingstep->has_behaviour_var('finish')) {
             return $this->process_finish($pendingstep);
@@ -109,8 +192,37 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         } else {
             $response = $pendingstep->get_qt_data();
             list($fraction, $state) = $this->question->grade_response_qa($response, $this->qa);
+
+            // Apply penalty for wrong attempts
+            $fraction = $this->adjust_fraction($fraction, $pendingstep);
             $pendingstep->set_fraction($fraction);
-            $pendingstep->set_state($state);
+
+            // For interactive mode: keep question active if answer is wrong and tries remain
+            if ($fraction < 1) {
+                // Get current try number
+                $prevtries = $this->qa->get_last_behaviour_var('_try', 0);
+                $newtry = $prevtries + 1;
+                $pendingstep->set_behaviour_var('_try', $newtry);
+
+                // Check if more tries available
+                $max_tries = $this->get_max_tries();
+                debugging("Question {$this->qa->get_slot()}: try {$newtry}/{$max_tries}, fraction {$fraction}", DEBUG_DEVELOPER);
+
+                if ($max_tries == 0 || $newtry < $max_tries) {
+                    // More tries available - keep question active in todo state (matches standard interactive behavior)
+                    $pendingstep->set_state(question_state::$todo);
+                    debugging("Question {$this->qa->get_slot()}: keeping active, more tries available", DEBUG_DEVELOPER);
+                } else {
+                    // No more tries - mark as finished wrong
+                    $pendingstep->set_state(question_state::$gradedwrong);
+                    debugging("Question {$this->qa->get_slot()}: max tries reached, marking finished", DEBUG_DEVELOPER);
+                }
+            } else {
+                // Correct answer - mark as finished right
+                $pendingstep->set_state(question_state::$gradedright);
+                debugging("Question {$this->qa->get_slot()}: correct answer, marking finished right", DEBUG_DEVELOPER);
+            }
+
             $pendingstep->set_new_response_summary($this->question->summarise_response($response));
         }
         return question_attempt::KEEP;

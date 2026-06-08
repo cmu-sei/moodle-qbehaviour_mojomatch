@@ -44,3 +44,6 @@ DM24-1319
 
 $string['pluginname'] = 'MojoMatch';
 $string['privacy:metadata'] = 'The MojoMatch behaviour plugin does not store any personal data.';
+
+// State string for interactive mode
+$string['triesremaining'] = 'Tries remaining: {$a}';
