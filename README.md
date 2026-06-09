@@ -3,6 +3,14 @@
 ## Description
 This is a question behaviour plugin that allows Moodle to pull correct answers from TopoMojo during a live question attempt. Moodle will call functions from the TopoMojo Question Type Plugin, qtype_mojomatch, to perform this. This plugin is therefore also used in conjunction with the Moodle activity plugin for TopoMojo labs, mod_topomojo.
 
+Because correct answers can be transformed at runtime per gamespace, this behaviour must be the grader for mojomatch questions in every mode (a standard Moodle behaviour cannot resolve the live answer). It therefore adapts its grading to the activity's configured **How questions behave** setting:
+
+- **Deferred feedback:** responses are saved only; all questions are graded when the attempt is finished. No Check button, no retries, no penalty.
+- **Immediate feedback:** a per-question Check button grades a single try. No retries and no penalty.
+- **Interactive with multiple tries / Adaptive:** a Check button grades each try; wrong answers may be retried up to the activity's submission limit. A penalty is deducted per wrong try, matching Moodle's standard interactive behaviour: a correct answer after N wrong tries scores `fraction − (penalty × N)`, floored at 0.
+
+Question weight and penalty values are imported from the TopoMojo challenge by mod_topomojo; this behaviour reads the penalty from the question definition and applies it only in the penalised modes above.
+
 ## License
 TopoMojo question behaviour plugin for Moodle
 

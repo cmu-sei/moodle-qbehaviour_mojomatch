@@ -98,18 +98,68 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
      * Applies the penalty from the question's penalty field (read from TopoMojo challenge JSON).
      * Penalty is deducted for each incorrect attempt beyond the first.
      */
+    /**
+     * Whether penalties apply under the activity's configured behaviour.
+     *
+     * Penalty is a multiple-try concept: it only makes sense when the student
+     * can submit a question more than once. Single-shot modes (deferred and
+     * immediate feedback) must never apply a penalty, and adaptivenopenalty
+     * disables it by definition.
+     *
+     * @return bool
+     */
+    protected function penalty_applies() {
+        $penalised = ['interactive', 'interactivecountback', 'adaptive'];
+        return in_array($this->preferredbehaviour, $penalised, true);
+    }
+
+    /**
+     * Whether the activity behaviour grades on a per-question Check button.
+     *
+     * Interactive, immediate-feedback and adaptive modes grade as soon as the
+     * student submits a question. Deferred feedback does not - the student only
+     * saves responses and everything is graded when the attempt is finished.
+     *
+     * @return bool
+     */
+    protected function grades_on_check() {
+        $immediate = ['interactive', 'interactivecountback', 'immediatefeedback', 'adaptive'];
+        return in_array($this->preferredbehaviour, $immediate, true);
+    }
+
+    /**
+     * Whether the behaviour allows multiple tries per question.
+     *
+     * Only interactive/adaptive modes keep a question active for further tries
+     * after a wrong answer. Immediate feedback grades exactly once.
+     *
+     * @return bool
+     */
+    protected function allows_retries() {
+        $multitry = ['interactive', 'interactivecountback', 'adaptive'];
+        return in_array($this->preferredbehaviour, $multitry, true);
+    }
+
     public function adjust_fraction($fraction, question_attempt_pending_step $pendingstep) {
-        // If answer is correct (fraction = 1), no penalty
-        if ($fraction >= 1) {
+        // Only penalise under behaviours that allow multiple tries. Deferred and
+        // immediate feedback give a single attempt, so no penalty applies;
+        // adaptivenopenalty disables penalties by definition.
+        if (!$this->penalty_applies()) {
             return $fraction;
         }
 
-        // Apply penalty for wrong attempts
-        // Get number of previous tries (not counting this one)
+        // Apply a cumulative penalty for each wrong try already used, matching
+        // standard Moodle interactive behaviour. This applies even when the
+        // current answer is correct: a correct answer after N wrong tries
+        // scores (fraction - penalty * N), floored at 0.
+        //
+        // adjust_fraction() runs in process_submit() BEFORE the current try's
+        // _try var is incremented, so get_last_behaviour_var('_try') returns
+        // the number of tries already used prior to this submission - exactly
+        // the multiplier we want.
         $prevtries = $this->qa->get_last_behaviour_var('_try', 0);
 
         if ($prevtries > 0) {
-            // Deduct penalty * number of previous wrong tries
             $penalty = $this->question->penalty * $prevtries;
             $fraction = max(0, $fraction - $penalty);
         }
@@ -126,9 +176,10 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
     }
 
     public function get_expected_data() {
-        if ($this->qa->get_state()->is_active()) {
-            // Always allow submission (matches TopoMojo's immediate feedback pattern)
-            // Individual Check button per question
+        // Only expose the per-question Check button ('submit') for modes that
+        // grade immediately. Deferred feedback saves responses and grades at
+        // finish, so it must not offer a Check button.
+        if ($this->grades_on_check() && $this->qa->get_state()->is_active()) {
             return array(
                 'answer' => PARAM_RAW_TRIMMED,
                 'submit' => PARAM_BOOL,
@@ -191,15 +242,21 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
             $pendingstep->set_state(question_state::$invalid);
         } else {
             $response = $pendingstep->get_qt_data();
-            list($fraction, $state) = $this->question->grade_response_qa($response, $this->qa);
+            list($rawfraction, $state) = $this->question->grade_response_qa($response, $this->qa);
 
-            // Apply penalty for wrong attempts
-            $fraction = $this->adjust_fraction($fraction, $pendingstep);
+            // Determine correctness from the RAW grade, before any penalty is
+            // applied. A correct answer after wrong tries is penalized below but
+            // must still be treated as correct for state/try purposes.
+            $iscorrect = ($rawfraction >= 1);
+
+            // Apply cumulative penalty for prior wrong tries (may reduce a
+            // correct answer's score, e.g. 1 - 0.1*2 = 0.80).
+            $fraction = $this->adjust_fraction($rawfraction, $pendingstep);
             $pendingstep->set_fraction($fraction);
 
-            // For interactive mode: keep question active if answer is wrong and tries remain
-            if ($fraction < 1) {
-                // Get current try number
+            if (!$iscorrect && $this->allows_retries()) {
+                // Multi-try modes (interactive/adaptive): keep the question
+                // active for another try if tries remain.
                 $prevtries = $this->qa->get_last_behaviour_var('_try', 0);
                 $newtry = $prevtries + 1;
                 $pendingstep->set_behaviour_var('_try', $newtry);
@@ -217,6 +274,10 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
                     $pendingstep->set_state(question_state::$gradedwrong);
                     debugging("Question {$this->qa->get_slot()}: max tries reached, marking finished", DEBUG_DEVELOPER);
                 }
+            } else if (!$iscorrect) {
+                // Single-try modes (immediate feedback): one grade, then done.
+                $pendingstep->set_state(question_state::$gradedwrong);
+                debugging("Question {$this->qa->get_slot()}: wrong answer, single-try mode, marking finished", DEBUG_DEVELOPER);
             } else {
                 // Correct answer - mark as finished right
                 $pendingstep->set_state(question_state::$gradedright);
@@ -276,6 +337,10 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         } else {
             //list($fraction, $state) = $this->question->grade_response($response);
             list($fraction, $state) = $this->question->grade_response_qa($response, $this->qa);
+            // Apply the same cumulative penalty as the Check button, so finishing
+            // the quiz with a correct answer after wrong tries is penalized
+            // identically (e.g. correct after 2 wrong tries = 1 - 0.1*2 = 0.80).
+            $fraction = $this->adjust_fraction($fraction, $pendingstep);
             $pendingstep->set_fraction($fraction);
             $pendingstep->set_state($state);
         }
