@@ -54,6 +54,14 @@ class qbehaviour_mojomatch_renderer extends qbehaviour_renderer {
             return '';
         }
 
+        // Only show the per-question Check button for behaviours that grade on
+        // submit (interactive/immediate/adaptive). Deferred feedback grades at
+        // finish, so it must not offer a Check button.
+        $behaviour = $qa->get_behaviour();
+        if (method_exists($behaviour, 'grades_on_check') && !$behaviour->grades_on_check()) {
+            return '';
+        }
+
         // Just render the Check button
         // Try counter is shown in the state string via get_state_string() method
         return $this->submit_button($qa, $options);

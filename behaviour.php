@@ -122,7 +122,7 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
      *
      * @return bool
      */
-    protected function grades_on_check() {
+    public function grades_on_check() {
         $immediate = ['interactive', 'interactivecountback', 'immediatefeedback', 'adaptive'];
         return in_array($this->preferredbehaviour, $immediate, true);
     }
