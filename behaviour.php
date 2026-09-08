@@ -124,7 +124,7 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
      * @return bool
      */
     public function grades_on_check() {
-        $immediate = ['interactive', 'interactivecountback', 'immediatefeedback', 'adaptive'];
+        $immediate = ['interactive', 'interactivecountback', 'immediatefeedback', 'adaptive', 'adaptivenopenalty'];
         return in_array($this->preferredbehaviour, $immediate, true);
     }
 
@@ -137,7 +137,7 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
      * @return bool
      */
     protected function allows_retries() {
-        $multitry = ['interactive', 'interactivecountback', 'adaptive'];
+        $multitry = ['interactive', 'interactivecountback', 'adaptive', 'adaptivenopenalty'];
         return in_array($this->preferredbehaviour, $multitry, true);
     }
 
@@ -203,11 +203,11 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
 
         // If question is active and has been graded, show tries remaining (matches standard interactive)
         if ($state->is_active() && $state == question_state::$todo) {
-            $laststep = $this->qa->get_last_step();
-            if ($laststep->has_behaviour_var('_try')) {
-                $current_try = $laststep->get_behaviour_var('_try');
+            // Use get_last_behaviour_var so the count is still found when the most
+            // recent step is a save (which carries no _try var) after a wrong Check.
+            $current_try = $this->qa->get_last_behaviour_var('_try', 0);
+            if ($current_try > 0) {
                 $max_tries = $this->get_max_tries();
-
                 if ($max_tries > 0) {
                     $tries_left = max(0, $max_tries - $current_try);
                     return get_string('triesremaining', 'qbehaviour_mojomatch', $tries_left);
@@ -316,6 +316,8 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
             return $this->summarise_manual_comment($step);
         } else if ($step->has_behaviour_var('finish')) {
             return $this->summarise_finish($step);
+        } else if ($step->has_behaviour_var('submit')) {
+            return $this->summarise_submit($step);
         } else {
             return $this->summarise_save($step);
         }
