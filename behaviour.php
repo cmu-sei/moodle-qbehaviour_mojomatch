@@ -69,26 +69,27 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
             return $this->maxtries;
         }
 
-        // Get the topomojo activity setting via global lookup
-        // The question belongs to a topomojo activity context
-        global $DB, $PAGE;
+        global $DB;
 
-        // Try to get context from PAGE (when rendering challenge page)
-        $context = $PAGE->context;
-
-        if ($context && $context->contextlevel == CONTEXT_MODULE) {
-            $cm = get_coursemodule_from_id('topomojo', $context->instanceid);
-            if ($cm) {
-                $topomojo = $DB->get_record('topomojo', ['id' => $cm->instance]);
-                if ($topomojo) {
-                    // Cache and return
-                    $this->maxtries = (int)$topomojo->submissions;
+        // Resolve the owning TopoMojo activity from the attempt's question usage,
+        // NOT from $PAGE. $PAGE is only the module context on the attempt page; on
+        // CLI (the close_attempts task), regrades, web services, preview, and inside
+        // mod_quiz it is not, so a $PAGE-based lookup silently returned 0 (unlimited).
+        // topomojo_attempts links the question usage to its activity.
+        $qubaid = $this->qa->get_usage_id();
+        if (is_numeric($qubaid)) {
+            $topomojoid = $DB->get_field('topomojo_attempts', 'topomojoid',
+                ['questionusageid' => $qubaid]);
+            if ($topomojoid) {
+                $submissions = $DB->get_field('topomojo', 'submissions', ['id' => $topomojoid]);
+                if ($submissions !== false) {
+                    $this->maxtries = (int)$submissions;
                     return $this->maxtries;
                 }
             }
         }
 
-        // Default: unlimited tries
+        // Default: unlimited tries (no linked attempt record, e.g. ad-hoc preview).
         $this->maxtries = 0;
         return 0;
     }
@@ -180,10 +181,9 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         // grade immediately. Deferred feedback saves responses and grades at
         // finish, so it must not offer a Check button.
         if ($this->grades_on_check() && $this->qa->get_state()->is_active()) {
-            return array(
-                'answer' => PARAM_RAW_TRIMMED,
-                'submit' => PARAM_BOOL,
-            );
+            // Only the behaviour's own 'submit' var belongs here; the question's
+            // 'answer' expected-data is contributed by the question type.
+            return array('submit' => PARAM_BOOL);
         }
         return parent::get_expected_data();
     }
@@ -209,7 +209,7 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
                 $max_tries = $this->get_max_tries();
 
                 if ($max_tries > 0) {
-                    $tries_left = $max_tries - $current_try;
+                    $tries_left = max(0, $max_tries - $current_try);
                     return get_string('triesremaining', 'qbehaviour_mojomatch', $tries_left);
                 }
             }
@@ -242,46 +242,41 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
             $pendingstep->set_state(question_state::$invalid);
         } else {
             $response = $pendingstep->get_qt_data();
-            list($rawfraction, $state) = $this->question->grade_response_qa($response, $this->qa);
+            list($rawfraction, $gradedstate) = $this->question->grade_response_qa($response, $this->qa);
 
-            // Determine correctness from the RAW grade, before any penalty is
-            // applied. A correct answer after wrong tries is penalized below but
-            // must still be treated as correct for state/try purposes.
-            $iscorrect = ($rawfraction >= 1);
+            // Correctness comes from the graded state (which respects partial
+            // credit), not a raw threshold, so a partially-correct response is not
+            // mislabelled gradedwrong.
+            $iscorrect = ($gradedstate == question_state::$gradedright);
 
-            // Apply cumulative penalty for prior wrong tries (may reduce a
-            // correct answer's score, e.g. 1 - 0.1*2 = 0.80).
+            // Apply the cumulative penalty for prior wrong tries. This may reduce a
+            // correct answer's score (e.g. 1 - penalty*2); a correct answer is still
+            // gradedright with the penalized mark, matching core interactive.
             $fraction = $this->adjust_fraction($rawfraction, $pendingstep);
             $pendingstep->set_fraction($fraction);
 
             if (!$iscorrect && $this->allows_retries()) {
-                // Multi-try modes (interactive/adaptive): keep the question
-                // active for another try if tries remain.
+                // Multi-try modes (interactive/adaptive): keep the question active
+                // for another try while tries remain.
                 $prevtries = $this->qa->get_last_behaviour_var('_try', 0);
                 $newtry = $prevtries + 1;
                 $pendingstep->set_behaviour_var('_try', $newtry);
 
-                // Check if more tries available
-                $max_tries = $this->get_max_tries();
-                debugging("Question {$this->qa->get_slot()}: try {$newtry}/{$max_tries}, fraction {$fraction}", DEBUG_DEVELOPER);
-
-                if ($max_tries == 0 || $newtry < $max_tries) {
-                    // More tries available - keep question active in todo state (matches standard interactive behavior)
+                $maxtries = $this->get_max_tries();
+                if ($maxtries == 0 || $newtry < $maxtries) {
+                    // More tries available - keep active (matches standard interactive).
                     $pendingstep->set_state(question_state::$todo);
-                    debugging("Question {$this->qa->get_slot()}: keeping active, more tries available", DEBUG_DEVELOPER);
                 } else {
-                    // No more tries - mark as finished wrong
-                    $pendingstep->set_state(question_state::$gradedwrong);
-                    debugging("Question {$this->qa->get_slot()}: max tries reached, marking finished", DEBUG_DEVELOPER);
+                    // No tries left - finish with the graded state for this response.
+                    $pendingstep->set_state(question_state::graded_state_for_fraction($fraction));
                 }
             } else if (!$iscorrect) {
-                // Single-try modes (immediate feedback): one grade, then done.
-                $pendingstep->set_state(question_state::$gradedwrong);
-                debugging("Question {$this->qa->get_slot()}: wrong answer, single-try mode, marking finished", DEBUG_DEVELOPER);
+                // Single-try modes (immediate feedback): grade once; the state
+                // matches the (penalized) fraction so partial credit is preserved.
+                $pendingstep->set_state(question_state::graded_state_for_fraction($fraction));
             } else {
-                // Correct answer - mark as finished right
+                // Correct answer - finished right (penalized mark still applies).
                 $pendingstep->set_state(question_state::$gradedright);
-                debugging("Question {$this->qa->get_slot()}: correct answer, marking finished right", DEBUG_DEVELOPER);
             }
 
             $pendingstep->set_new_response_summary($this->question->summarise_response($response));
