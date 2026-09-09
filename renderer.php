@@ -36,11 +36,34 @@ DM24-1319
 defined('MOODLE_INTERNAL') || die();
 
 /**
- * Renderer for outputting parts of a question belonging to the deferred
- * feedback behaviour.
+ * Renderer for outputting parts of a question belonging to the mojomatch
+ * behaviour (interactive with multiple tries for TopoMojo integration).
  *
  * @copyright  2024 Carnegie Mellon University
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class qbehaviour_mojomatch_renderer extends qbehaviour_renderer {
+
+    /**
+     * Render the Check button for each question.
+     * Allows students to submit individual questions for immediate feedback.
+     */
+    public function controls(question_attempt $qa, question_display_options $options) {
+        // If question is finished or in read-only mode, don't show Check button
+        if (!$qa->get_state()->is_active() || $options->readonly) {
+            return '';
+        }
+
+        // Only show the per-question Check button for behaviours that grade on
+        // submit (interactive/immediate/adaptive). Deferred feedback grades at
+        // finish, so it must not offer a Check button.
+        $behaviour = $qa->get_behaviour();
+        if (method_exists($behaviour, 'grades_on_check') && !$behaviour->grades_on_check()) {
+            return '';
+        }
+
+        // Just render the Check button
+        // Try counter is shown in the state string via get_state_string() method
+        return $this->submit_button($qa, $options);
+    }
 }
