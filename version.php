@@ -45,7 +45,7 @@ DM24-1319
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'qbehaviour_mojomatch';
-$plugin->version   = 2026091100;
+$plugin->version   = 2026091101;
 $plugin->dependencies = [
     // Requires the qtype that ships the test helper and current grading support.
     'qtype_mojomatch' => 2026090800,
