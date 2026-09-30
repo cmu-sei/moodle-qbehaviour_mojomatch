@@ -219,6 +219,92 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         return parent::get_state_string($showcorrectness);
     }
 
+    /**
+     * Whether the question is wrong with tries still to come.
+     *
+     * This is this behaviour's equivalent of core interactive's try-again state,
+     * and it is deliberately not the same shape. process_submit() sets _try on a
+     * wrong answer only, and leaves the question active only while tries remain,
+     * so the pair below excludes a correct answer, a finished attempt, a spent
+     * try budget, and the single-shot modes, which never set _try at all.
+     *
+     * _try is read with get_last_behaviour_var, as get_state_string() does, so
+     * the state survives a save step: typing in the still-editable input after a
+     * wrong Check carries no _try var, and inspecting only the last step would
+     * end the state mid-try.
+     *
+     * @return bool
+     */
+    protected function is_further_try_state() {
+        return $this->qa->get_state()->is_active()
+                && $this->qa->get_last_behaviour_var('_try', 0) > 0;
+    }
+
+    /**
+     * Return the hint to show alongside the feedback, if there is one.
+     *
+     * Without this override the behaviour inherits question_behaviour's base
+     * implementation, which returns null unconditionally, so a hint imported
+     * from a TopoMojo challenge could never reach a student no matter how it was
+     * authored.
+     *
+     * Core's interactive behaviour cannot simply be reused: it indexes hints off
+     * `_triesleft`, counting DOWN from one more than the number of hints. This
+     * behaviour counts `_try` UP, so the index is re-derived here.
+     *
+     * @return question_hint|null the hint to display, or null for none.
+     */
+    public function get_applicable_hint() {
+        if (empty($this->question->hints) || !$this->is_further_try_state()) {
+            return null;
+        }
+
+        // The _try var counts wrong tries from 1, so the first wrong answer shows hint 0.
+        // Unlike core, the try budget comes from the activity's `submissions`
+        // setting and is unrelated to the number of hints, so a student can run
+        // out of hints long before they run out of tries. Hold on the last hint
+        // rather than silently dropping back to none.
+        $try = $this->qa->get_last_behaviour_var('_try', 0);
+        return $this->question->get_hint(min($try - 1, count($this->question->hints) - 1), $this->qa);
+    }
+
+    /**
+     * Keep the feedback region visible while another try is available.
+     *
+     * The parent calls $options->hide_all_feedback() for any question that is not
+     * finished, and a question awaiting another try never is, so without this the
+     * renderer would never even ask for the hint: core's qtype_renderer::feedback()
+     * only calls get_applicable_hint() inside its $options->feedback check.
+     *
+     * Unlike core interactive this deliberately leaves $options->readonly alone.
+     * Core freezes the input and routes the next try through a Try again button;
+     * here the student answers again in place, which is how TopoMojo plays.
+     *
+     * @param question_display_options $options the options to adjust.
+     */
+    public function adjust_display_options(question_display_options $options) {
+        if (!$this->is_further_try_state()) {
+            parent::adjust_display_options($options);
+            return;
+        }
+
+        // Let the hint adjust the options, as core interactive does. Plain
+        // question_hints do nothing here, but question_hint_with_parts sets
+        // clearwrong and shownumcorrect.
+        $hint = $this->get_applicable_hint();
+        if (!is_null($hint)) {
+            $hint->adjust_display_options($options);
+        }
+
+        // Call the parent, then put back the two fields hide_all_feedback() clears
+        // that the hint needs. Correctness stays hidden: the mark is provisional
+        // until the tries are used up.
+        $save = clone($options);
+        parent::adjust_display_options($options);
+        $options->feedback = $save->feedback;
+        $options->numpartscorrect = $save->numpartscorrect;
+    }
+
     public function process_action(question_attempt_pending_step $pendingstep) {
         if ($pendingstep->has_behaviour_var('finish')) {
             return $this->process_finish($pendingstep);
