@@ -35,6 +35,7 @@ DM24-1319
 
 namespace qbehaviour_mojomatch;
 
+use question_hint;
 use question_state;
 use test_question_maker;
 use qbehaviour_walkthrough_test_base;
@@ -134,5 +135,174 @@ final class walkthrough_test extends qbehaviour_walkthrough_test_base {
         $this->resetDebugging();
         $this->check_current_state(question_state::$gradedright);
         $this->check_current_mark(0);
+    }
+
+    /**
+     * Build an exactmatch question carrying the given hint texts.
+     *
+     * mod_topomojo imports a challenge question's hint as a single
+     * question_hints row, so one hint is the realistic case; the two-hint
+     * questions below exist to pin which hint is picked.
+     *
+     * @param string ...$hints hint texts, in order.
+     * @return \qtype_mojomatch_question
+     */
+    protected function make_question_with_hints(string ...$hints) {
+        $q = test_question_maker::make_question('mojomatch', 'exactmatch');
+        $q->hints = [];
+        foreach ($hints as $hint) {
+            $q->hints[] = new question_hint(0, $hint, FORMAT_MOODLE);
+        }
+        return $q;
+    }
+
+    /**
+     * Assert the rendered question contains a string.
+     *
+     * Rendering has to be wrapped because it emits DEBUG_DEVELOPER messages of
+     * its own: qtype_mojomatch_question::get_challenge_for_attempt() debugs when
+     * there is no TopoMojo gamespace behind the attempt, which is always the case
+     * under PHPUnit. The penalty tests above never render, so they only have to
+     * consume what process_submit() emits.
+     *
+     * @param string $string the text that must appear in the rendered question.
+     */
+    protected function check_rendered_output_contains(string $string): void {
+        $this->check_output_contains($string);
+        $this->resetDebugging();
+    }
+
+    /**
+     * Assert the rendered question does not contain a string.
+     *
+     * @param string $string the text that must not appear in the rendered question.
+     */
+    protected function check_rendered_output_does_not_contain(string $string): void {
+        $this->check_output_does_not_contain($string);
+        $this->resetDebugging();
+    }
+
+    /**
+     * No hint before the student has tried anything.
+     */
+    public function test_no_hint_is_shown_before_the_first_try(): void {
+        $q = $this->make_question_with_hints('It is two letters.');
+        $this->start_attempt_at_question($q, 'interactive', 1);
+
+        $this->check_current_state(question_state::$todo);
+        $this->check_rendered_output_does_not_contain('It is two letters.');
+    }
+
+    /**
+     * A wrong try shows the first hint; the next wrong try advances to the second.
+     */
+    public function test_each_wrong_try_advances_to_the_next_hint(): void {
+        $q = $this->make_question_with_hints('It is two letters.', 'It copies things.');
+        $this->start_attempt_at_question($q, 'interactive', 1);
+
+        // Try 1 wrong -> hint 1, and not hint 2.
+        $this->process_submission(['answer' => 'zz', '-submit' => 1]);
+        $this->resetDebugging();
+        $this->check_current_state(question_state::$todo);
+        $this->check_rendered_output_contains('It is two letters.');
+        $this->check_rendered_output_does_not_contain('It copies things.');
+
+        // Try 2 wrong -> hint 2.
+        $this->process_submission(['answer' => 'zzz', '-submit' => 1]);
+        $this->resetDebugging();
+        $this->check_current_state(question_state::$todo);
+        $this->check_rendered_output_contains('It copies things.');
+    }
+
+    /**
+     * The hint stops once the question is answered correctly - it is guidance for
+     * the next try, and there is no next try.
+     */
+    public function test_no_hint_is_shown_once_the_answer_is_correct(): void {
+        $q = $this->make_question_with_hints('It is two letters.');
+        $this->start_attempt_at_question($q, 'interactive', 1);
+
+        $this->process_submission(['answer' => 'zz', '-submit' => 1]);
+        $this->resetDebugging();
+        $this->check_rendered_output_contains('It is two letters.');
+
+        $this->process_submission(['answer' => 'cp', '-submit' => 1]);
+        $this->resetDebugging();
+        $this->check_current_state(question_state::$gradedright);
+        $this->check_rendered_output_does_not_contain('It is two letters.');
+    }
+
+    /**
+     * The hint survives typing in the still-editable input after a wrong Check.
+     *
+     * This is where this behaviour parts company with core interactive, which
+     * freezes the input behind a Try again button so no save step can land while
+     * a hint is showing. Here it can, and the save step carries no _try var, so a
+     * gate that inspected only the last step would drop the hint mid-try.
+     */
+    public function test_hint_survives_a_save_after_a_wrong_try(): void {
+        $q = $this->make_question_with_hints('It is two letters.');
+        $this->start_attempt_at_question($q, 'interactive', 1);
+
+        $this->process_submission(['answer' => 'zz', '-submit' => 1]);
+        $this->resetDebugging();
+        $this->check_rendered_output_contains('It is two letters.');
+
+        // A save, not a Check: the student is typing their next answer. This moves
+        // the question out of $todo into $complete, which is still active, so the
+        // hint has to survive the state change as well as the missing _try var.
+        $this->process_submission(['answer' => 'c']);
+        $this->resetDebugging();
+        $this->check_current_state(question_state::$complete);
+        $this->check_rendered_output_contains('It is two letters.');
+    }
+
+    /**
+     * With fewer hints than tries, the last hint keeps showing.
+     *
+     * The try budget comes from the activity's `submissions` setting and has
+     * nothing to do with how many hints the challenge supplied, so running out of
+     * hints must not silently drop back to no hint at all.
+     */
+    public function test_last_hint_holds_when_tries_outnumber_hints(): void {
+        $q = $this->make_question_with_hints('It is two letters.');
+        $this->start_attempt_at_question($q, 'interactive', 1);
+
+        $this->process_submission(['answer' => 'zz', '-submit' => 1]);
+        $this->resetDebugging();
+        $this->check_rendered_output_contains('It is two letters.');
+
+        $this->process_submission(['answer' => 'zzz', '-submit' => 1]);
+        $this->resetDebugging();
+        $this->check_current_state(question_state::$todo);
+        $this->check_rendered_output_contains('It is two letters.');
+    }
+
+    /**
+     * A question with no hints renders no hint region at all.
+     */
+    public function test_question_without_hints_shows_no_hint(): void {
+        $q = $this->make_question_with_hints();
+        $this->start_attempt_at_question($q, 'interactive', 1);
+
+        $this->process_submission(['answer' => 'zz', '-submit' => 1]);
+        $this->resetDebugging();
+        $this->check_current_state(question_state::$todo);
+        $this->check_current_output($this->get_no_hint_visible_expectation());
+        $this->resetDebugging();
+    }
+
+    /**
+     * Single-shot modes show no hint: a wrong answer is already graded, so there
+     * is nothing left for a hint to inform.
+     */
+    public function test_immediatefeedback_shows_no_hint(): void {
+        $q = $this->make_question_with_hints('It is two letters.');
+        $this->start_attempt_at_question($q, 'immediatefeedback', 1);
+
+        $this->process_submission(['answer' => 'zz', '-submit' => 1]);
+        $this->resetDebugging();
+        $this->check_current_state(question_state::$gradedwrong);
+        $this->check_rendered_output_does_not_contain('It is two letters.');
     }
 }
