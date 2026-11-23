@@ -43,12 +43,21 @@ defined('MOODLE_INTERNAL') || die();
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @package qbehaviour_mojomatch
  */
-
 class qbehaviour_mojomatch_type extends question_behaviour_type {
+    /**
+     * This behaviour is not offered as a choice on its own.
+     *
+     * @return bool
+     */
     public function is_archetypal() {
         return false;
     }
 
+    /**
+     * Get the display options this behaviour never shows.
+     *
+     * @return array
+     */
     public function get_unused_display_options() {
         return ['correctness', 'marks', 'specificfeedback', 'generalfeedback',
                 'rightanswer'];

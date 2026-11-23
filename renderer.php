@@ -50,7 +50,7 @@ class qbehaviour_mojomatch_renderer extends qbehaviour_renderer {
      * Allows students to submit individual questions for immediate feedback.
      */
     public function controls(question_attempt $qa, question_display_options $options) {
-        // If question is finished or in read-only mode, don't show Check button
+        // If question is finished or in read-only mode, don't show Check button.
         if (!$qa->get_state()->is_active() || $options->readonly) {
             return '';
         }
@@ -64,7 +64,7 @@ class qbehaviour_mojomatch_renderer extends qbehaviour_renderer {
         }
 
         // Just render the Check button
-        // Try counter is shown in the state string via get_state_string() method
+        // Try counter is shown in the state string via get_state_string() method.
         return $this->submit_button($qa, $options);
     }
 }

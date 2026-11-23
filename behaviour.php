@@ -46,7 +46,6 @@ defined('MOODLE_INTERNAL') || die();
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @package qbehaviour_mojomatch
  */
-
 class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
     /** @var string The preferred behaviour for this attempt */
     protected $preferredbehaviour;
@@ -54,6 +53,12 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
     /** @var int Cached max tries value */
     protected $maxtries = null;
 
+    /**
+     * Create the behaviour for a question attempt.
+     *
+     * @param question_attempt $qa The question attempt this behaviour manages.
+     * @param string $preferredbehaviour The behaviour the quiz was set to use.
+     */
     public function __construct(question_attempt $qa, $preferredbehaviour) {
         parent::__construct($qa, $preferredbehaviour);
         $this->preferredbehaviour = $preferredbehaviour;
@@ -65,7 +70,7 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
      * 0 = unlimited tries.
      */
     public function get_max_tries() {
-        // Return cached value if already looked up
+        // Return cached value if already looked up.
         if ($this->maxtries !== null) {
             return $this->maxtries;
         }
@@ -145,6 +150,13 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         return in_array($this->preferredbehaviour, $multitry, true);
     }
 
+    /**
+     * Apply the cumulative penalty for the wrong tries already used.
+     *
+     * @param float $fraction The raw fraction for this response.
+     * @param question_attempt_pending_step $pendingstep The step being processed.
+     * @return float The fraction after the penalty.
+     */
     public function adjust_fraction($fraction, question_attempt_pending_step $pendingstep) {
         // Only penalise under behaviours that allow multiple tries. Deferred and
         // immediate feedback give a single attempt, so no penalty applies;
@@ -172,14 +184,30 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         return $fraction;
     }
 
+    /**
+     * Only automatically gradable questions can use this behaviour.
+     *
+     * @param question_definition $question The question to check.
+     * @return bool
+     */
     public function is_compatible_question(question_definition $question) {
         return $question instanceof question_automatically_gradable;
     }
 
+    /**
+     * Get the lowest fraction the question can score.
+     *
+     * @return float
+     */
     public function get_min_fraction() {
         return $this->question->get_min_fraction();
     }
 
+    /**
+     * Get the data this behaviour expects in a submission.
+     *
+     * @return array Expected variable names mapped to their parameter types.
+     */
     public function get_expected_data() {
         // Only expose the per-question Check button ('submit') for modes that
         // grade immediately. Deferred feedback saves responses and grades at
@@ -192,6 +220,11 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         return parent::get_expected_data();
     }
 
+    /**
+     * Get a summary of the right answer, from TopoMojo when it applies.
+     *
+     * @return string|null
+     */
     public function get_right_answer_summary() {
         global $PAGE;
         if ($PAGE->pagetype != 'question-bank-previewquestion-preview') {
@@ -202,24 +235,30 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         return $answer;
     }
 
+    /**
+     * Get the text for the question state, showing the tries remaining while the question is active.
+     *
+     * @param bool $showcorrectness Whether correctness may be shown.
+     * @return string
+     */
     public function get_state_string($showcorrectness) {
         $state = $this->qa->get_state();
 
-        // If question is active and has been graded, show tries remaining (matches standard interactive)
+        // If question is active and has been graded, show tries remaining (matches standard interactive).
         if ($state->is_active() && $state == question_state::$todo) {
             // Use get_last_behaviour_var so the count is still found when the most
             // recent step is a save (which carries no _try var) after a wrong Check.
-            $current_try = $this->qa->get_last_behaviour_var('_try', 0);
-            if ($current_try > 0) {
-                $max_tries = $this->get_max_tries();
-                if ($max_tries > 0) {
-                    $tries_left = max(0, $max_tries - $current_try);
-                    return get_string('triesremaining', 'qbehaviour_mojomatch', $tries_left);
+            $currenttry = $this->qa->get_last_behaviour_var('_try', 0);
+            if ($currenttry > 0) {
+                $maxtries = $this->get_max_tries();
+                if ($maxtries > 0) {
+                    $triesleft = max(0, $maxtries - $currenttry);
+                    return get_string('triesremaining', 'qbehaviour_mojomatch', $triesleft);
                 }
             }
         }
 
-        // Otherwise use parent behavior
+        // Otherwise use parent behavior.
         return parent::get_state_string($showcorrectness);
     }
 
@@ -309,11 +348,17 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         $options->numpartscorrect = $save->numpartscorrect;
     }
 
+    /**
+     * Route an action to the matching process method.
+     *
+     * @param question_attempt_pending_step $pendingstep The step being built.
+     * @return bool question_attempt::KEEP or question_attempt::DISCARD.
+     */
     public function process_action(question_attempt_pending_step $pendingstep) {
         if ($pendingstep->has_behaviour_var('finish')) {
             return $this->process_finish($pendingstep);
         } else if ($pendingstep->has_behaviour_var('submit')) {
-            // Process Check button (immediate feedback like TopoMojo)
+            // Process Check button (immediate feedback like TopoMojo).
             return $this->process_submit($pendingstep);
         } else if ($pendingstep->has_behaviour_var('comment')) {
             return $this->process_comment($pendingstep);
@@ -322,8 +367,14 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         }
     }
 
+    /**
+     * Grade the response when the student presses Check.
+     *
+     * @param question_attempt_pending_step $pendingstep The step being built.
+     * @return bool question_attempt::KEEP or question_attempt::DISCARD.
+     */
     public function process_submit(question_attempt_pending_step $pendingstep) {
-        // Interactive mode: Check button grades immediately
+        // Interactive mode: Check button grades immediately.
         if ($this->qa->get_state()->is_finished()) {
             return question_attempt::DISCARD;
         }
@@ -374,11 +425,14 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         return question_attempt::KEEP;
     }
 
-    /*
-     * Like the parent method, except that when a respones is gradable, but not
+    /**
+     * Like the parent method, except that when a response is gradable, but not
      * completely, we move it to the invalid state.
      *
      * TODO refactor, to remove the duplication.
+     *
+     * @param question_attempt_pending_step $pendingstep The step being built.
+     * @return bool question_attempt::KEEP or question_attempt::DISCARD.
      */
     public function process_save(question_attempt_pending_step $pendingstep) {
         if ($this->qa->get_state()->is_finished()) {
@@ -401,6 +455,12 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         return question_attempt::KEEP;
     }
 
+    /**
+     * Describe a step for the response history.
+     *
+     * @param question_attempt_step $step The step to describe.
+     * @return string
+     */
     public function summarise_action(question_attempt_step $step) {
         if ($step->has_behaviour_var('comment')) {
             return $this->summarise_manual_comment($step);
@@ -413,6 +473,12 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         }
     }
 
+    /**
+     * Grade the response when the attempt is finished.
+     *
+     * @param question_attempt_pending_step $pendingstep The step being built.
+     * @return bool question_attempt::KEEP or question_attempt::DISCARD.
+     */
     public function process_finish(question_attempt_pending_step $pendingstep) {
         if ($this->qa->get_state()->is_finished()) {
             return question_attempt::DISCARD;
