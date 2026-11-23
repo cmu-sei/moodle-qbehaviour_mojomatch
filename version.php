@@ -37,7 +37,7 @@ DM24-1319
 /**
  * Version information for the calculated question type.
  *
- * @package    qbehaviour
+ * @package    qbehaviour_mojomatch
  * @subpackage mojomatch
  * @copyright  2024 Carnegie Mellon University
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later

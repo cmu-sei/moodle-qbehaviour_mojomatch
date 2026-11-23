@@ -44,10 +44,10 @@ defined('MOODLE_INTERNAL') || die();
  *
  * @copyright  2024 Carnegie Mellon University
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package qbehaviour_mojomatch
  */
 
 class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
-
     /** @var string The preferred behaviour for this attempt */
     protected $preferredbehaviour;
 
@@ -79,8 +79,11 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         // topomojo_attempts links the question usage to its activity.
         $qubaid = $this->qa->get_usage_id();
         if (is_numeric($qubaid)) {
-            $topomojoid = $DB->get_field('topomojo_attempts', 'topomojoid',
-                ['questionusageid' => $qubaid]);
+            $topomojoid = $DB->get_field(
+                'topomojo_attempts',
+                'topomojoid',
+                ['questionusageid' => $qubaid]
+            );
             if ($topomojoid) {
                 $submissions = $DB->get_field('topomojo', 'submissions', ['id' => $topomojoid]);
                 if ($submissions !== false) {
@@ -184,7 +187,7 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         if ($this->grades_on_check() && $this->qa->get_state()->is_active()) {
             // Only the behaviour's own 'submit' var belongs here; the question's
             // 'answer' expected-data is contributed by the question type.
-            return array('submit' => PARAM_BOOL);
+            return ['submit' => PARAM_BOOL];
         }
         return parent::get_expected_data();
     }
@@ -329,7 +332,7 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
             $pendingstep->set_state(question_state::$invalid);
         } else {
             $response = $pendingstep->get_qt_data();
-            list($rawfraction, $gradedstate) = $this->question->grade_response_qa($response, $this->qa);
+            [$rawfraction, $gradedstate] = $this->question->grade_response_qa($response, $this->qa);
 
             // Correctness comes from the graded state (which respects partial
             // credit), not a raw threshold, so a partially-correct response is not
@@ -419,8 +422,8 @@ class qbehaviour_mojomatch extends question_behaviour_with_multiple_tries {
         if (!$this->question->is_gradable_response($response)) {
             $pendingstep->set_state(question_state::$gaveup);
         } else {
-            //list($fraction, $state) = $this->question->grade_response($response);
-            list($fraction, $state) = $this->question->grade_response_qa($response, $this->qa);
+            // list($fraction, $state) = $this->question->grade_response($response);
+            [$fraction, $state] = $this->question->grade_response_qa($response, $this->qa);
             // Apply the same cumulative penalty as the Check button, so finishing
             // the quiz with a correct answer after wrong tries is penalized
             // identically (e.g. correct after 2 wrong tries = 1 - 0.1*2 = 0.80).

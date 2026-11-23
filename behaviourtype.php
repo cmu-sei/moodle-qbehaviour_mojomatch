@@ -41,6 +41,7 @@ defined('MOODLE_INTERNAL') || die();
  *
  * @copyright  2024 Carnegie Mellon University
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package qbehaviour_mojomatch
  */
 
 class qbehaviour_mojomatch_type extends question_behaviour_type {
@@ -49,7 +50,7 @@ class qbehaviour_mojomatch_type extends question_behaviour_type {
     }
 
     public function get_unused_display_options() {
-        return array('correctness', 'marks', 'specificfeedback', 'generalfeedback',
-                'rightanswer');
+        return ['correctness', 'marks', 'specificfeedback', 'generalfeedback',
+                'rightanswer'];
     }
 }

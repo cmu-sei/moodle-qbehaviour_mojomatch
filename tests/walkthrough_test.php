@@ -73,9 +73,9 @@ require_once($CFG->dirroot . '/question/engine/tests/helpers.php');
  * @copyright  2024 Carnegie Mellon University
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers     \qbehaviour_mojomatch
+ * @package qbehaviour_mojomatch
  */
 final class walkthrough_test extends qbehaviour_walkthrough_test_base {
-
     /**
      * interactive: correct after two wrong tries scores 1 - penalty*2.
      */

@@ -42,9 +42,9 @@ defined('MOODLE_INTERNAL') || die();
  *
  * @copyright  2024 Carnegie Mellon University
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package qbehaviour_mojomatch
  */
 class qbehaviour_mojomatch_renderer extends qbehaviour_renderer {
-
     /**
      * Render the Check button for each question.
      * Allows students to submit individual questions for immediate feedback.
